@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <title>Kakao Map</title>
+
+
+    <script
+      type="text/javascript"
+      src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=6b30c5e712196d6373613d3c68dc8156&autoload=false"
+    ></script>
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      #map {
+        width: 100%;
+        height: 100%;
+      }
+
+      /* ✅ 강아지 캐릭터 오버레이 */
+      .dog-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transform: translateY(-6px);
+        pointer-events: none;
+      }
+
+      .dog-badge {
+        margin-bottom: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.78);
+        color: white;
+        font-size: 12px;
+        line-height: 1;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.28);
+        white-space: nowrap;
+      }
+
+      .dog-name {
+        font-weight: 800;
+        letter-spacing: -0.2px;
+      }
+
+      .dog-level {
+        font-weight: 800;
+        opacity: 0.95;
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .dog-wrapper {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: white;
+        padding: 4px;
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+      }
+      .dog-wrapper img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+        display: block;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+
+    <script>
+      // -----------------------------
+      // Utils
+      // -----------------------------
+      function logToRN(msg) {
+        try {
+          window.ReactNativeWebView?.postMessage(String(msg));
+        } catch (e) {}
+      }
+
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      // -----------------------------
+      // Map state
+      // -----------------------------
+      let map = null;
+
+      // 내 위치 표시
+      let myMarker = null;
+
+      // 산책 경로(붓칠)
+      let walkLine = null;
+
+      // 추천 경로(3개)
+      let routeLines = [];
+
+      // 강아지 오버레이
+      let dogOverlay = null;
+      let dogLastImageBase64 = null;
+      let dogLastNickname = null;
+      let dogLastLevel = null;
+
+      // -----------------------------
+      // Init
+      // -----------------------------
+      function initMap() {
+        const container = document.getElementById("map");
+        const options = {
+          center: new kakao.maps.LatLng(37.5665, 126.9780),
+          level: 4,
+        };
+        map = new kakao.maps.Map(container, options);
+
+        // 산책 경로 라인 준비
+        walkLine = new kakao.maps.Polyline({
+          path: [],
+          strokeWeight: 6,
+          strokeColor: "#22c55e",
+          strokeOpacity: 0.85,
+          strokeStyle: "solid",
+        });
+        walkLine.setMap(map);
+
+        logToRN("map initialized");
+      }
+
+      // -----------------------------
+      // Features
+      // -----------------------------
+      function setLocation(lat, lng) {
+        if (!map) return;
+
+        const pos = new kakao.maps.LatLng(lat, lng);
+
+        if (!myMarker) {
+          myMarker = new kakao.maps.Marker({ position: pos });
+          myMarker.setMap(map);
+        } else {
+          myMarker.setPosition(pos);
+        }
+
+        map.setCenter(pos);
+      }
+
+      function setPath(points) {
+        if (!map || !walkLine) return;
+        const path = (points || []).map((p) => new kakao.maps.LatLng(p.lat, p.lng));
+        walkLine.setPath(path);
+      }
+
+      function clearRoutes() {
+        routeLines.forEach((l) => l.setMap(null));
+        routeLines = [];
+      }
+
+      function drawRoutes(routes) {
+        if (!map) return;
+
+        clearRoutes();
+
+        const colors = ["#00E676", "#00B0FF", "#FF5252"];
+
+        (routes || []).forEach((r, idx) => {
+          const path = (r.points || []).map(
+            (p) => new kakao.maps.LatLng(p.lat, p.lng)
+          );
+
+          const polyline = new kakao.maps.Polyline({
+            map,
+            path,
+            strokeWeight: 7,
+            strokeColor: colors[idx] || "#FFFFFF",
+            strokeOpacity: 0.9,
+            strokeStyle: "solid",
+          });
+
+          routeLines.push(polyline);
+        });
+
+        // 첫 경로 기준으로 화면 맞추기
+        if (routes?.[0]?.points?.length) {
+          const bounds = new kakao.maps.LatLngBounds();
+          routes[0].points.forEach((p) =>
+            bounds.extend(new kakao.maps.LatLng(p.lat, p.lng))
+          );
+          map.setBounds(bounds);
+        }
+      }
+
+      function setDog(lat, lng, imageBase64, nickname, level) {
+        if (!map) return;
+
+        const pos = new kakao.maps.LatLng(lat, lng);
+
+        dogLastImageBase64 = imageBase64;
+        dogLastNickname = nickname;
+        dogLastLevel = level;
+
+        if (dogOverlay) dogOverlay.setMap(null);
+
+        const safeName = escapeHtml(nickname || "이름없음");
+        const safeLevel = escapeHtml(level ?? 1);
+
+        const content = `
+          <div class="dog-container">
+            <div class="dog-badge">
+              <div class="dog-name">${safeName}</div>
+              <div class="dog-level">Lv.${safeLevel}</div>
+            </div>
+
+            <div class="dog-wrapper">
+              <img src="data:image/jpeg;base64,${imageBase64}" />
+            </div>
+          </div>
+        `;
+
+        dogOverlay = new kakao.maps.CustomOverlay({
+          position: pos,
+          content,
+          yAnchor: 1,
+        });
+
+        dogOverlay.setMap(map);
+      }
+
+      function moveDog(lat, lng) {
+        if (!map) return;
+
+        const pos = new kakao.maps.LatLng(lat, lng);
+
+        // MOVE가 먼저 오면 마지막 이미지로 생성
+        if (!dogOverlay) {
+          if (dogLastImageBase64) {
+            setDog(lat, lng, dogLastImageBase64, dogLastNickname, dogLastLevel);
+          }
+          return;
+        }
+
+        dogOverlay.setPosition(pos);
+      }
+
+      // -----------------------------
+      // RN Message Handling
+      // -----------------------------
+      function handleRNMessage(msg) {
+        if (!msg || !msg.type) return;
+
+        switch (msg.type) {
+          case "SET_LOCATION":
+            setLocation(msg.lat, msg.lng);
+            break;
+
+          case "SET_PATH":
+            setPath(msg.points || []);
+            break;
+
+          case "CLEAR_ROUTES":
+            clearRoutes();
+            break;
+
+          case "SET_ROUTES":
+            drawRoutes(msg.routes || []);
+            break;
+
+          case "SET_DOG":
+            setDog(msg.lat, msg.lng, msg.imageBase64, msg.nickname, msg.level);
+            break;
+
+          case "MOVE_DOG":
+            moveDog(msg.lat, msg.lng);
+            break;
+
+          case "TOAST":
+            logToRN(msg.text || "toast");
+            break;
+
+          default:
+            // logToRN("unknown type: " + msg.type);
+            break;
+        }
+      }
+
+      // ✅ iOS/Android 모두 대응
+      window.addEventListener("message", (event) => {
+        try {
+          handleRNMessage(JSON.parse(event.data));
+        } catch (e) {}
+      });
+
+      document.addEventListener("message", (event) => {
+        try {
+          handleRNMessage(JSON.parse(event.data));
+        } catch (e) {}
+      });
+
+      // -----------------------------
+      // Start
+      // -----------------------------
+      kakao.maps.load(() => {
+        initMap();
+      });
+    </script>
+  </body>
+</html>
