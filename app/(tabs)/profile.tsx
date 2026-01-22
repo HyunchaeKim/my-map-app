@@ -1,28 +1,15 @@
 import { clearDogImageUri, loadDogImageUri, saveDogImageUri } from "@/components/dogProfile";
-import { usePosts } from "@/components/PostStore";
-import PostTile from "@/components/PostTile";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function ProfileScreen() {
-  const router = useRouter();
-  const { posts } = usePosts();
-
   const [dogUri, setDogUri] = useState<string | null>(null);
-
-  const MY_USER_ID = "me";
-
-  const myPosts = useMemo(
-    () => posts.filter((p) => p.userId === MY_USER_ID),
-    [posts]
-  );
 
   useEffect(() => {
     (async () => {
       const saved = await loadDogImageUri();
-      setDogUri(saved);
+      setDogUri(saved ?? null);
     })();
   }, []);
 
@@ -84,39 +71,7 @@ export default function ProfileScreen() {
         <Text style={styles.hint}>
           팁: 얼굴/몸이 잘 보이게 정사각형으로 크롭하면 지도에서 캐릭터처럼 예뻐 보여요.
         </Text>
-
-        {/* ✅ 게시물 추가 */}
-        <Pressable style={[styles.btn, { marginTop: 12 }]} onPress={() => router.push("/post/new")}>
-          <Text style={styles.btnText}>➕ 게시물 추가</Text>
-        </Pressable>
       </View>
-
-      {/* ✅ 내 게시물 그리드 */}
-      <FlatList
-        style={{ marginTop: 12 }}
-        data={myPosts}
-        keyExtractor={(item) => item.id}
-        numColumns={3}
-        renderItem={({ item }) => (
-          <PostTile
-            uri={item.imageUri}
-            onPress={() =>
-              router.push({
-                pathname: "/post/[id]",
-                params: { id: item.id },
-              })
-            }
-          />
-        )}
-        columnWrapperStyle={{ gap: 2 }}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        ListEmptyComponent={
-          <View style={{ padding: 20 }}>
-            <Text style={{ color: "#aaa" }}>아직 게시물이 없어요.</Text>
-          </View>
-        }
-        showsVerticalScrollIndicator={false}
-      />
     </View>
   );
 }
@@ -134,7 +89,13 @@ const styles = StyleSheet.create({
   avatarEmptyText: { color: "#bbb", fontWeight: "700" },
 
   row: { flexDirection: "row", justifyContent: "center", gap: 10 },
-  btn: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 14, backgroundColor: "white", alignItems: "center" },
+  btn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: "white",
+    alignItems: "center",
+  },
   btnGhost: { backgroundColor: "#222" },
   btnText: { color: "black", fontWeight: "800" },
   btnTextGhost: { color: "white", fontWeight: "800" },

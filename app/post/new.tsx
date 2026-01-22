@@ -1,4 +1,3 @@
-import { usePosts } from "@/components/PostStore";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -6,7 +5,6 @@ import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from "reac
 
 export default function NewPost() {
   const router = useRouter();
-  const { addPost } = usePosts();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [caption, setCaption] = useState("");

@@ -48,3 +48,14 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## 실행 방법
+
+1. 카카오 개발자에서 JavaScript 키 발급
+2. 프로젝트 루트에 `.env` 파일 생성
+3. 아래 내용 입력
+
+EXPO_PUBLIC_KAKAO_JS_KEY=자신의_카카오_지도_키
+
+4. 실행
+   npx expo start
